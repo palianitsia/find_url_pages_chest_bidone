@@ -14,6 +14,7 @@ $PAGES = [
     ["url" => "https://it.bidoo.com/?tag=cucina", "name" => "cucina"],
     ["url" => "https://it.bidoo.com/?tab=casa_e_giardino", "name" => "casa_e_giardino"],
     ["url" => "https://it.bidoo.com/?tag=elettrodomestici", "name" => "elettrodomestici"],
+    ["url" => "https://it.bidoo.com/?tag=scorte_casa", "name" => "scorte_casa"],
     ["url" => "https://it.bidoo.com/?tag=videogame", "name" => "videogame"],
     ["url" => "https://it.bidoo.com/?tag=giocattoli", "name" => "giocattoli"],
     ["url" => "https://it.bidoo.com/?tag=tablet-e-pc", "name" => "tablet-e-pc"],
