@@ -1,246 +1,103 @@
+# Versione aggiornata funzionante per 02/07/2026, ritorna url con tag, gli url sono sotto redirect sullap pagina con forziere
+
 import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import json
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-HEADERS = {"User-Agent": USER_AGENT}
-DESS_COOKIE = "incola qui il tuo dess :)"
+HEADERS_BASE = {
+    "User-Agent": USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br, zstd",
+    "Accept-Language": "it-IT,it;q=0.9,uk;q=0.8,ru;q=0.7,en-US;q=0.6,en;q=0.5",
+    "Cache-Control": "no-cache"
+}
+DESS_COOKIE = "tuo_biscotto_qui=)"
+DOMAIN = "https://it.bidoo.com"
 
-PAGES = [
-    {"url": "https://it.bidoo.com/?tab=BIDS", "name": "BIDS"},
-    {"url": "https://it.bidoo.com/?tab=MANUAL", "name": "MANUAL"},
-    {"url": "https://it.bidoo.com/?tag=buoni", "name": "buoni"},
-    {"url": "https://it.bidoo.com/?tag=smartphone", "name": "smartphone"},
-    {"url": "https://it.bidoo.com/?tag=apple", "name": "apple"},
-    {"url": "https://it.bidoo.com/?tag=bellezza", "name": "bellezza"},
-    {"url": "https://it.bidoo.com/?tag=cucina", "name": "cucina"},
-    {"url": "https://it.bidoo.com/?tab=casa_e_giardino", "name": "casa_e_giardino"},
-    {"url": "https://it.bidoo.com/?tag=elettrodomestici", "name": "elettrodomestici"},
-    {"url": "https://it.bidoo.com/?tag=scorte_casa", "name": "scorte_casa"},
-    {"url": "https://it.bidoo.com/?tag=videogame", "name": "videogame"},
-    {"url": "https://it.bidoo.com/?tag=giocattoli", "name": "giocattoli"},
-    {"url": "https://it.bidoo.com/?tag=tablet-e-pc", "name": "tablet-e-pc"},
-    {"url": "https://it.bidoo.com/?tag=hobby", "name": "hobby"},
-    {"url": "https://it.bidoo.com/?tag=smartwatch", "name": "smartwatch"},
-    {"url": "https://it.bidoo.com/?tag=animali_domestici", "name": "animali_domestici"},
-    {"url": "https://it.bidoo.com/?tag=moda", "name": "moda"},
-    {"url": "https://it.bidoo.com/?tag=smart-tv", "name": "smart-tv"},
-    {"url": "https://it.bidoo.com/?tag=fai_da_te", "name": "fai_da_te"},
-    {"url": "https://it.bidoo.com/?tag=luxury", "name": "luxury"},
-    {"url": "https://it.bidoo.com/?tag=cuffie-e-audio", "name": "cuffie-e-audio"},
-    {"url": "https://it.bidoo.com/?tag=back-to-school", "name": "back-to-school"},
-    {"url": "https://it.bidoo.com/?tag=prima-infanzia", "name": "prima-infanzia"},
-    {"url": "https://it.bidoo.com/", "name": "homepage"}
-]
-
-def get_html(url):
-    try:
-        resp = requests.get(url, headers=HEADERS, cookies={"dess": DESS_COOKIE}, timeout=10)
-        return resp.text if resp.status_code == 200 else None
-    except Exception as e:
-        print(f"Errore nel caricare {url}: {e}")
-        return None
-
-def find_visible_chest_links(html, base_url):
-    """
-    Cerca chest visibili seguendo esattamente la logica del JavaScript:
-    .huntChest.huntChestTag a.visible
-    """
-    if not html:
-        return []
+def find_chests_via_api():
+    """Cerca chest tramite API get_chest_tag_url per tag 0-50"""
+    chest_data = {} 
     
-    soup = BeautifulSoup(html, 'html.parser')
-    chest_links = []
+    headers = {
+        "Cookie": f"dess={DESS_COOKIE};",
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": DOMAIN + "/",
+    }
     
-    # Cerco esattamente come nel JavaScript: .huntChest.huntChestTag a.visible
-    # Prima cerco elementi con classe huntChest E huntChestTag
-    hunt_chests = soup.find_all(class_=["huntChest", "huntChestTag"])
+    print("🔍 Ricerca API per tag 0-50...")
     
-    # Filtro quelli che hanno entrambe le classi
-    valid_chest_containers = []
-    for element in hunt_chests:
-        classes = element.get('class', [])
-        if 'huntChest' in classes and 'huntChestTag' in classes:
-            valid_chest_containers.append(element)
+    for tag in range(0, 51):
+        try:
+            api_url = f"{DOMAIN}/ajax/chest/get_chest_tag_url.php?tag={tag}"
+            resp = requests.get(api_url, headers=headers, timeout=5)
+            
+            if resp.status_code == 200:
+                try:
+                    text = resp.text
+                    data = json.loads(text) if text else None
+                    
+                    if data and isinstance(data, dict):
+                        chest_url = None
+                        for key in ['url', 'link', 'href', 'chest_url', 'redirect']:
+                            if key in data and data[key]:
+                                chest_url = data[key]
+                                break
+                        
+                        if chest_url and 'c=' in chest_url and 'sign=' in chest_url:
+                            if chest_url.startswith('/'):
+                                chest_url = f"{DOMAIN}{chest_url}"
+                            chest_data[tag] = chest_url
+                            print(f"   ✅ API tag {tag}: trovato chest")
+                except:
+                    pass
+        except:
+            pass
     
-    # Per ogni container valido, cerco i link a.visible
-    for container in valid_chest_containers:
-        visible_links = container.find_all('a', class_='visible')
-        for link in visible_links:
-            href = link.get('href', '')
-            if href and 'chest.php' in href and 'c=chest_hunt_tag' in href:
-                # Ottengo il tag dal chest
-                tag = '?'
-                for cls in link.get('class', []):
-                    if cls.startswith('chest-tag'):
-                        tag = cls.replace('chest-tag', '')
-                        break
-                
-                full_url = href if href.startswith('http') else urljoin(base_url, href)
-                chest_links.append({
-                    'url': full_url,
-                    'tag': tag,
-                    'element': str(link)[:100] + '...' if len(str(link)) > 100 else str(link)
-                })
-    
-    # Se non trovo con il metodo sopra, provo una ricerca più diretta
-    if not chest_links:
-        # Cerco direttamente a.visible dentro elementi con le classi corrette
-        visible_chest_links = soup.select('.huntChest.huntChestTag a.visible')
-        for link in visible_chest_links:
-            href = link.get('href', '')
-            if href and 'chest.php' in href and 'c=chest_hunt_tag' in href:
-                # Ottengo il tag dal chest
-                tag = '?'
-                for cls in link.get('class', []):
-                    if cls.startswith('chest-tag'):
-                        tag = cls.replace('chest-tag', '')
-                        break
-                
-                full_url = href if href.startswith('http') else urljoin(base_url, href)
-                chest_links.append({
-                    'url': full_url,
-                    'tag': tag,
-                    'element': str(link)[:100] + '...' if len(str(link)) > 100 else str(link)
-                })
-    
-    return chest_links
-
-def check_page(page_info):
-    """
-    Controlla una pagina e restituisce informazioni sui chest trovati
-    """
-    url = page_info["url"]
-    name = page_info["name"]
-    
-    html = get_html(url)
-    if not html:
-        return {
-            "page": name, 
-            "url": url, 
-            "chests": [], 
-            "status": "error",
-            "message": "Impossibile caricare la pagina"
-        }
-    
-    chests = find_visible_chest_links(html, url)
-    
-    if chests:
-        return {
-            "page": name,
-            "url": url,
-            "chests": chests,
-            "status": "success",
-            "message": f"Trovati {len(chests)} chest"
-        }
-    else:
-        return {
-            "page": name,
-            "url": url,
-            "chests": [],
-            "status": "no_chest",
-            "message": "Nessun chest visibile trovato"
-        }
+    print(f"   📊 API: trovati {len(chest_data)} chest unici")
+    return chest_data
 
 def find_all_chests():
-    """
-    Trova tutti i chest validi nelle pagine specificate
-    """
-    all_results = []
+    """Trova tutti i chest usando l'API"""
+    valid_chests = []
     
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {executor.submit(check_page, page_info): page_info for page_info in PAGES}
-        
-        for future in as_completed(futures):
-            try:
-                result = future.result()
-                all_results.append(result)
-            except Exception as e:
-                page_info = futures[future]
-                all_results.append({
-                    "page": page_info["name"], 
-                    "url": page_info["url"], 
-                    "chests": [],
-                    "status": "error",
-                    "message": str(e)
-                })
+    print("="*60)
+    print("🔍 RICERCA CHEST BIDOO")
+    print("="*60)
+    print()
     
-    return all_results
+    api_chests = find_chests_via_api()
+    
+    print(f"\n📊 Totale chest trovati: {len(api_chests)}")
+    print()
+    
+    for tag, chest_url in api_chests.items():
+        valid_chests.append({
+            "name": f"tag_{tag}",
+            "tag": tag,
+            "referer": f"{DOMAIN}/?tag={tag}",
+            "chest_url": chest_url
+        })
+    
+    return valid_chests
 
 if __name__ == "__main__":
-    print("=" * 80)
-    print("RICERCA CHEST VISIBILI SU BIDOO")
-    print("Ricerca: .huntChest.huntChestTag a.visible")
-    print("=" * 80)
-    
     results = find_all_chests()
     
-    # Statistiche
-    total_pages = len(results)
-    pages_with_chests = 0
-    total_chests = 0
+    print(f"\n{'='*60}")
+    print(f"📊 RIEPILOGO FINALE")
+    print(f"   Chest trovati: {len(results)}")
+    print('='*60)
+    print()
     
-    print("\n" + "=" * 80)
-    print("RISULTATI DETTAGLIATI")
-    print("=" * 80)
-    
-    for result in results:
-        page_name = result["page"]
-        page_url = result["url"]
-        chests = result["chests"]
-        status = result["status"]
-        message = result["message"]
-        
-        if status == "error":
-            print(f"\n❌ [ERRORE] {page_name}")
-            print(f"   URL: {page_url}")
-            print(f"   Messaggio: {message}")
-        elif chests:
-            pages_with_chests += 1
-            total_chests += len(chests)
-            
-            print(f"\n✅ [CHEST TROVATI] {page_name}")
-            print(f"   URL: {page_url}")
-            print(f"   {message}")
-            
-            for i, chest_info in enumerate(chests, 1):
-                print(f"   {i}. Chest tag {chest_info['tag']}:")
-                print(f"      {chest_info['url']}")
-        else:
-            print(f"\n❌ [NO CHEST] {page_name}")
-            print(f"   URL: {page_url}")
-            print(f"   {message}")
-    
-    # Riepilogo finale
-    print("\n" + "=" * 80)
-    print("RIEPILOGO FINALE")
-    print("=" * 80)
-    print(f"Pagine controllate: {total_pages}")
-    print(f"Pagine con chest: {pages_with_chests}")
-    print(f"Pagine senza chest: {total_pages - pages_with_chests}")
-    print(f"Totale chest trovati: {total_chests}")
-    
-    # Stampa tutti i link trovati in un formato facilmente copiabile
-    if total_chests > 0:
-        print("\n" + "=" * 80)
-        print("TUTTI I LINK DEI CHEST TROVATI")
-        print("=" * 80)
-        
-        for result in results:
-            if result['chests']:
-                print(f"\n{result['page']}:")
-                for chest_info in result['chests']:
-                    print(f"  {chest_info['url']}")
-        
-        print("\n" + "=" * 80)
-        print("LINK DA COPIARE:")
-        print("=" * 80)
-        for result in results:
-            for chest_info in result['chests']:
-                print(chest_info['url'])
-    
-    print("\n" + "=" * 80)
-    print("SCANSIONE COMPLETATA")
-    print("=" * 80)
-
+    if results:
+        for i, chest in enumerate(results, 1):
+            print(f"{i}. 📦 {chest['name']}")
+            print(f"   Tag: {chest['tag']}")
+            print(f"   Referer: {chest['referer']}")
+            print(f"   URL: {chest['chest_url']}")
+            print()
+    else:
+        print("❌ Nessun chest trovato!")
