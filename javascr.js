@@ -1,41 +1,52 @@
-(function() {
-    const chest = document.querySelector('.huntChest.huntChestTag a.visible');
-    if (!chest) {
-        console.log("❌ Nessun chest visibile trovato");
-        return null;
+// Versione aggiornata funzionante per 02/07/2026, ritorna url con tag, gli url sono sotto redirect sullap pagina con forziere
+(async function() {
+    const DOMAIN = window.location.origin;
+    const urls = [];
+    
+    console.log("🔍 Ricerca API per tag 0-50...");
+    
+    for (let tag = 0; tag <= 50; tag++) {
+        try {
+            const response = await fetch(`${DOMAIN}/ajax/chest/get_chest_tag_url.php?tag=${tag}`, {
+                headers: {
+                    'Accept': 'application/json, text/javascript, */*; q=0.01',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                if (data && typeof data === 'object') {
+                    let chestUrl = null;
+                    const keys = ['url', 'link', 'href', 'chest_url', 'redirect'];
+                    
+                    for (const key of keys) {
+                        if (data[key] && data[key].trim()) {
+                            chestUrl = data[key];
+                            break;
+                        }
+                    }
+                    
+                    if (chestUrl && chestUrl.includes('c=') && chestUrl.includes('sign=')) {
+                        urls.push(`${DOMAIN}/?tag=${tag}`);
+                        console.log(`   ✅ API tag ${tag}: trovato chest`);
+                    }
+                }
+            }
+        } catch (error) {
+        }
     }
     
-    const tagClass = Array.from(chest.classList).find(c => c.startsWith('chest-tag'));
-    const tag = tagClass ? tagClass.replace('chest-tag', '') : '?';
-    const href = chest.getAttribute('href');
+    console.log(`   📊 API: trovati ${urls.length} chest unici`);
+    console.log("\n📋 REFERER TROVATI:");
+    if (urls.length > 0) {
+        urls.forEach((url, index) => {
+            console.log(`${index + 1}. ${url}`);
+        });
+    } else {
+        console.log("❌ Nessun chest trovato!");
+    }
     
-    console.log(`🎯 Chest tag ${tag}:`, href);
-    
-    // Copia il link (metodo cross-browser)
-    const copyToClipboard = (text) => {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        document.body.appendChild(textarea);
-        textarea.select();
-        try {
-            document.execCommand('copy');
-            console.log("📋 Link copiato negli appunti!");
-        } catch (err) {
-            console.log("❌ Impossibile copiare, copia manualmente:");
-            console.log(href);
-        }
-        document.body.removeChild(textarea);
-    };
-    
-    copyToClipboard(href);
-    
-    // Restituisce l'oggetto chest per ulteriori operazioni
-    return {
-        element: chest,
-        tag: tag,
-        href: href,
-        open: function() {
-            window.open(href, '_blank');
-        }
-    };
+    return urls;
 })();
